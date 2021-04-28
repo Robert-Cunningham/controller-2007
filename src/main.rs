@@ -203,18 +203,18 @@ type ServoCommand = i8;
 
 // forward is -30, 30
 
-const auto: [Action; 5] = [Action {
-    left: -60,
-    right: 60,
-    time: 2000,
+const AUTONOMOUS_ACTIONS: [Action; 5] = [Action {
+    left: -30,
+    right: 30,
+    time: 3500,
 }, Action { // turn clockwise 30 degrees
     left: -30,
     right: 0,
-    time: 500,
+    time: 1200,
 }, Action { // drive backwards
-    left: 60,
-    right: -60,
-    time: 1500,
+    left: 30,
+    right: -30,
+    time: 3000,
 }, Action { // turn counter clockwise 30 degrees
     left: 0,
     right: 30,
@@ -226,10 +226,12 @@ const auto: [Action; 5] = [Action {
 }];
 
 fn autonomous(d: &mut stm32f3xx_hal::delay::Delay, dc: &mut DrivingController) {
-    for a in &auto {
+    for a in &AUTONOMOUS_ACTIONS {
         dc.ls.set_duty_i8(a.left);
         dc.rs.set_duty_i8(a.right);
-        d.delay_ms(a.time);
+        for i in 0..(a.time / 100) {
+            d.delay_ms(100 as u32);
+        }
     }
 
     dc.ls.set_duty_i8(0);

@@ -15,6 +15,9 @@ cortex-m-semihosting = "0.3.7"
 embedded-hal = "0.2.4"
 panic-semihosting = "0.5.6"
 
+[dependencies.ezing]
+path = "../libraries/ezing"
+
 # ezing = "0.2.1"
 
 # Uncomment for the panic example.
