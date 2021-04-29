@@ -74,9 +74,9 @@ pub trait Servo {
     fn set_duty(&mut self, duty: i32);
 
     // takes a number between -100 and 100.
-    fn set_duty_i8(&mut self, d: i8) {
-        let input = d as i32;
-        self.set_duty(((input + 100) * 500 / 200) + 500);
+    fn set_duty_i8(&mut self, d: f32) {
+        //let input = d as i32;
+        self.set_duty((((d + 100.0) * 500.0 / 200.0) + 500.0) as i32);
         // map a i8 to 500-1000.
     }
     //fn new<T>(gpioa: &mut hal::gpio::gpioa::Parts, channel: &PwmChannel<T, NoPins>) -> self;
@@ -157,7 +157,7 @@ fn main() -> ! {
     ch1_with_pins.enable();
     let mut rs = RightServo {
         s: ch1_with_pins,
-        trim: -8,
+        trim: -19,
     };
 
     let mut ch2_with_pins =
@@ -165,7 +165,15 @@ fn main() -> ! {
     ch2_with_pins.enable();
     let mut ls = LeftServo {
         s: ch2_with_pins,
-        trim: -5,
+        trim: 0,
+    };
+
+    let mut ch3_with_pins =
+    ch3.output_to_pa2(gpioa.pa2.into_af1(&mut gpioa.moder, &mut gpioa.afrl));
+    ch3_with_pins.enable();
+    let mut arms = ArmServo {
+        s: ch3_with_pins,
+        trim: 0,
     };
 
     let mut dc = DrivingController {ls, rs};
@@ -179,7 +187,8 @@ fn main() -> ! {
     // drive these between 500 and 1000.
 
     // 13 or 15 is a lowest driving speed for these servos.
-    autonomous(&mut d, &mut dc);
+    autonomous(&mut d, &mut dc, &mut arms);
+    //calibrate(&mut dc, &mut d, &mut arms);
     loop {
 
     }
@@ -216,26 +225,26 @@ type ServoCommand = i8;
 // forward is -30, 30
 // clockwise 30 degrees is about -30, 0 for 1200ms.
 
-const AUTONOMOUS_ACTIONS: [Action; 8] = [Action {
+const AUTONOMOUS_ACTIONS: [Action; 9] = [Action {
     left: -30,
     right: 30,
-    arm: 100,
-    time: 2000,
+    arm: -20,
+    time: 3300,
 }, Action { // turn counter clockwise 90 degrees
+    left: -30,
+    right: -30,
+    arm: -20,
+    time: 900,
+}, Action { // drive forwards
     left: 30,
     right: -30,
-    arm: 100,
-    time: 1500,
-}, Action { // drive forwards
-    left: -30,
-    right: 30,
-    arm: 100,
-    time: 3000,
+    arm: -20,
+    time: 300,
 }, Action { // turn clockwise 90 degrees
     left: 30,
-    right: -30,
-    arm: 100,
-    time: 1500,
+    right: 0,
+    arm: -20,
+    time: 1300,
 }, Action { // drive backwards again, to align with the wall. Also bring the arm to a reasonable position.
     left: 30,
     right: -30,
@@ -245,43 +254,67 @@ const AUTONOMOUS_ACTIONS: [Action; 8] = [Action {
     left: -30,
     right: 30,
     arm: 20,
-    time: 2000,
+    time: 1500,
 }, Action { // bring down the arm
     left: 0,
     right: 0,
-    arm: 0,
+    arm: 40,
     time: 200,
 }, Action { // drive backwards to sweep the jacks off 
     left: 30,
     right: -30,
-    arm: 0,
+    arm: 40,
+    time: 500,
+}, Action { // drive backwards to sweep the jacks off 
+    left: 0,
+    right: 0,
+    arm: -20,
     time: 500,
 }];
 
-fn autonomous(d: &mut stm32f3xx_hal::delay::Delay, dc: &mut DrivingController) {
+fn autonomous(d: &mut stm32f3xx_hal::delay::Delay, dc: &mut DrivingController, arm: &mut ArmServo) {
     for a in &AUTONOMOUS_ACTIONS {
-        dc.ls.set_duty_i8(a.left);
-        dc.rs.set_duty_i8(a.right);
+        dc.ls.set_duty_i8(a.left as f32);
+        dc.rs.set_duty_i8(a.right as f32);
+        arm.set_duty_i8(a.arm as f32);
+        //dc.rs.set_duty_i8(a.right);
         for i in 0..(a.time / 100) {
             d.delay_ms(100 as u32);
         }
     }
 
-    dc.ls.set_duty_i8(0);
-    dc.rs.set_duty_i8(0);
+    dc.ls.set_duty_i8(0.0);
+    dc.rs.set_duty_i8(0.0);
 }
 
 // 1 controller tick is 10us. at 50hz,
 
-fn calibrate(s: &mut impl Servo, d: &mut stm32f3xx_hal::delay::Delay) {
-    for i in 0..3 {
-        // count it off
-        s.set_duty(120);
-        d.delay_ms(1000 as u16);
+fn calibrate(dc: &mut DrivingController, d: &mut stm32f3xx_hal::delay::Delay, arm: &mut ArmServo) {
+    let normal_speed = 30_f32;
+
+    loop {
+        d.delay_ms(2000 as u16);
+        d.delay_ms(2000 as u16);
+        d.delay_ms(2000 as u16);
+        dc.ls.set_duty_i8(-1_f32 * normal_speed);
+
+        for i in -200..200 {
+            dc.rs.set_duty_i8(normal_speed + (i as f32)*0.1_f32);
+            d.delay_ms(100 as u16);
+        }
+        dc.rs.set_duty_i8(0.0);
+        dc.ls.set_duty_i8(0.0);
+
     }
 
-    for i in 0..30 {
-        s.set_duty(90 + i);
-        d.delay_ms(1000 as u16);
-    }
+    //for i in 0..3 {
+    //    // count it off
+    //    s.set_duty(120);
+    //    d.delay_ms(1000 as u16);
+    //}
+
+    //for i in 0..30 {
+    //    s.set_duty(90 + i);
+    //    d.delay_ms(1000 as u16);
+    //}
 }
