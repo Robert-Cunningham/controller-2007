@@ -51,6 +51,11 @@ struct LeftServo {
     trim: i32,
 }
 
+struct ArmServo {
+    s: stm32f3xx_hal::pwm::PwmChannel<stm32f3xx_hal::pwm::TIM2_CH3, stm32f3xx_hal::pwm::WithPins>,
+    trim: i32,
+}
+
 impl RightServo {
     //fn new(p0: gpioa::P0, gpioa: &mut hal::gpio::gpioa::Parts, ch1: PwmChannel<TIM2_CH1, NoPins>) -> RightServo {
     //}
@@ -84,6 +89,12 @@ impl Servo for RightServo {
 }
 
 impl Servo for LeftServo {
+    fn set_duty(&mut self, d: i32) {
+        self.s.set_duty((d + self.trim) as u32); // trim moves it in increments of 1/100 of the total range on each tick.
+    }
+}
+
+impl Servo for ArmServo {
     fn set_duty(&mut self, d: i32) {
         self.s.set_duty((d + self.trim) as u32); // trim moves it in increments of 1/100 of the total range on each tick.
     }
@@ -195,6 +206,7 @@ struct DrivingSequence {}
 struct Action {
     left: ServoCommand,
     right: ServoCommand,
+    arm: ServoCommand,
     time: u32,
 }
 
@@ -202,27 +214,48 @@ type ServoCommand = i8;
 
 
 // forward is -30, 30
+// clockwise 30 degrees is about -30, 0 for 1200ms.
 
-const AUTONOMOUS_ACTIONS: [Action; 5] = [Action {
+const AUTONOMOUS_ACTIONS: [Action; 8] = [Action {
     left: -30,
     right: 30,
-    time: 3500,
-}, Action { // turn clockwise 30 degrees
-    left: -30,
-    right: 0,
-    time: 1200,
-}, Action { // drive backwards
+    arm: 100,
+    time: 2000,
+}, Action { // turn counter clockwise 90 degrees
     left: 30,
     right: -30,
+    arm: 100,
+    time: 1500,
+}, Action { // drive forwards
+    left: -30,
+    right: 30,
+    arm: 100,
     time: 3000,
-}, Action { // turn counter clockwise 30 degrees
-    left: 0,
-    right: 30,
-    time: 500,
-}, Action {
+}, Action { // turn clockwise 90 degrees
     left: 30,
     right: -30,
+    arm: 100,
+    time: 1500,
+}, Action { // drive backwards again, to align with the wall. Also bring the arm to a reasonable position.
+    left: 30,
+    right: -30,
+    arm: 20,
     time: 1000,
+}, Action { // drive forwards to jacks
+    left: -30,
+    right: 30,
+    arm: 20,
+    time: 2000,
+}, Action { // bring down the arm
+    left: 0,
+    right: 0,
+    arm: 0,
+    time: 200,
+}, Action { // drive backwards to sweep the jacks off 
+    left: 30,
+    right: -30,
+    arm: 0,
+    time: 500,
 }];
 
 fn autonomous(d: &mut stm32f3xx_hal::delay::Delay, dc: &mut DrivingController) {
